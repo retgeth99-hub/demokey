@@ -1,0 +1,54 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: pubmed_demo
+      POSTGRES_USER: pubmed
+      POSTGRES_PASSWORD: pubmed
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pubmed -d pubmed_demo"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    ports:
+      - "5432:5432"
+    volumes:
+      - pubmed_pg_data:/var/lib/postgresql/data
+
+  app:
+    build: .
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DATABASE_URL: postgresql+asyncpg://pubmed:pubmed@postgres:5432/pubmed_demo
+      APP_HOST: 0.0.0.0
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=3)",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      app:
+        condition: service_healthy
+
+volumes:
+  pubmed_pg_data:
+
